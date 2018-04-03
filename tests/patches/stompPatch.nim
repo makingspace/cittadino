@@ -1,5 +1,21 @@
 import net, strutils
 
+const
+  testUrl* = "stomp://localhost/"
+  testModelExchangeName* = "model_exchange"
+  testNameSpace* = "testing"
+  testModelExchangePath* = "model_exchange_testing"
+  testRoutingKey* = "obj.saved"
+  testRoutingKey2* = "obj2.saved"
+  testDestinationImp* = "/exchange/$#/$#" % [testModelExchangePath, testRoutingKey]
+  testPayloadImpl* = """{"user":"zax","message-id":1}"""
+  testMessageId* = "ok"
+
+var
+  testPayload* = testPayloadImpl
+  testDestination* = testDestinationImp
+  testExposeMessageId* = true
+
 type
   StompClient* = ref object
     uri*: string
@@ -16,21 +32,31 @@ type
 
 type
   EventType* = enum
-    etConnect, etSend, etDisconnect, etSubscribe, etAck, etDrain
+    etConnect, etSend, etDisconnect, etSubscribe, etAck, etNack, etDrain,
+    etCallback, etSubscriber, etOnConnect
   Event* = object
     eventType*: EventType
     values*: seq[string]
 
-proc event(eventType: EventType, values: varargs[string]): Event =
+proc event*(eventType: EventType, values: varargs[string]): Event =
   Event(
     eventType: eventType,
     values: @values
   )
 
-var eventLog* = newSeq[Event]()
-
 proc `[]`*(r: StompResponse, key: string): string =
-  result = "ok"
+  case key
+  of "destination":
+    result = testDestination
+  of "message-id":
+    if not testExposeMessageId:
+      result = nil
+    else:
+      result = testMessageId
+  of "server":
+    result = "RabbitMQ/3.6.15"
+  else:
+    result = nil
 
 proc `$`*(c: StompClient): string =
   result = "Client " & c.uri
@@ -43,22 +69,42 @@ proc newStompClient*(socket: Socket, uri: string): StompClient =
     uri: uri
   )
 
+var testEventLog* = newSeq[Event]()
+proc resetEventLog*() =
+  testEventLog.setLen(0)
+
 proc connect*(c: StompClient) =
-  eventLog.add event(etConnect, c.uri)
+  testEventLog.add event(etConnect, c.uri)
   c.connected = true
+  if not c.connectedCallback.isNil:
+    let stompResponse = StompResponse(
+      payload: testPayload
+    )
+    c.connectedCallback(c, stompResponse)
 
 proc ack*(c: StompClient, id: string) =
-  eventLog.add event(etAck, id)
+  testEventLog.add event(etAck, id)
+
+proc nack*(c: StompClient, id: string) =
+  testEventLog.add event(etNack, id)
 
 proc subscribe*(c: StompClient, destination, ack: string, headers: seq[Header]) =
-  eventLog.add event(etSubscribe, destination)
+  testEventLog.add event(etSubscribe, destination)
 
 proc disconnect*(c: StompClient) =
-  eventLog.add event(etDisconnect, c.uri)
+  testEventLog.add event(etDisconnect, c.uri)
   c.connected = false
 
 proc waitForMessages*(c: StompClient) =
-  eventLog.add event(etDrain)
+  testEventLog.add event(etDrain)
+
+  let stompResponse = StompResponse(
+    payload: testPayload
+  )
+
+  if not c.messageCallback.isNil:
+    testEventLog.add event(etCallback, testPayload)
+    c.messageCallback(c, stompResponse)
 
 proc send*(c: StompClient, destination, payload, content_type: string) =
-  eventLog.add event(etSend, destination, payload)
+  testEventLog.add event(etSend, destination, payload)
