@@ -1,7 +1,7 @@
 import random, json, strutils
 from os import paramStr
 from logging import nil
-import pubnub
+import cittadino
 
 randomize()
 

@@ -1,5 +1,5 @@
 import unittest, json, sequtils, strutils
-import pubnub
+import cittadino
 import stomp
 
 proc checkDestination(destination: string) =
