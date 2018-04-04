@@ -1,3 +1,20 @@
+## cittadino: a simple, opinionated pubsub framework
+## =================================================
+##
+## *cittadino* is a simple, small library that implements a pubsub system over STOMP.
+##
+## It exposes a single main object type, ``PubSub``, with its constructor,
+## ``newPubSub()``, which provides two main procs: ``publishModelEvent()`` and
+## ``subscribe()``. These procedures take care of publishing and subscribing,
+## respectively. Subscriber procedures can be registered with ``subscribe()``
+## to certain AMQP/STOMP-style topic patterns, and arbitrary JSON messages can
+## be sent to routing keys with ``publishModelEvent()``.
+##
+## In order process incoming events, call ``run()`` inside of a process. That
+## process will loop and block, waiting for incoming messages. Any topics that
+## match the patterns that were registered with ``subscribe()`` will have their
+## messages passed to the handler procedures.
+##
 import stomp, net, json, strutils, tables, re
 from logging import nil
 
@@ -65,8 +82,22 @@ proc newPubSub*(stompUrl, modelExchangeName: string, nameSpace = "", ): PubSub =
   ## Create a new PubSub object. Given the URL of a STOMP server and the name
   ## of the exchange to listen to, will create and manage a STOMP connection,
   ## optionally suffixed with ``nameSpace``.
+  ##
+  ## The URL should be a fully qualified `STOMP` URI: starting with
+  ## ``stomp://`` or ``stomp+ssl://`` including necessary user/password
+  ## information, including a ``vhost`` at the end (in the examples, the
+  ## default ``/``), and finally ending with query parameters to encode
+  ## connection options.
+  ##
+  ## Currently the Nim STOMP library understands a single query parameter:
+  ## ``heartbeat=<interval>``, which will request a heartbeat from the STOMP
+  ## server every ``interval`` seconds.
   runnableExamples:
-    var pubsub = newPubSub("stomp://user:user@192.168.111.222/", "")
+    var pubsub = newPubSub("stomp://user:user@192.168.111.222/", "model_exchange")
+  runnableExamples:
+    var pubsub = newPubSub("stomp://user:user@192.168.111.222/?heartbeat=10", "amq_ex")
+  runnableExamples:
+    var pubsub = newPubSub("stomp+ssl://user:user@192.168.111.222/", "my_exchange")
 
   let
     socket = newSocket()
@@ -105,17 +136,23 @@ proc exchangePath(pubsub: PubSub): string =
 
   return "/exchange/" & exchangeName
 
-proc subscribe*(pubsub: var PubSub, topic: string, callback: PubSubCallback) =
+proc subscribe*(pubsub: var PubSub, topic: string, callback: PubSubCallback, autoDelete = false) =
   ## Register a callback procedure against a subscription pattern. ``callback``
   ## whenever a message is received whose destination matches against
   ## ``topic``.
   ##
+  ## Destinations are declared with ``durable:true``, which specifies that if
+  ## the broker is restarted, the queue should be retained. By default they are
+  ## also created with ``auto-delete:false``, which specifies that the queue
+  ## should not be destroyed if there is no active consumer (ie, published
+  ## messages will still be routed to the queue and consumed when ``run()`` is
+  ## called again). This can be toggled with the ``autoDelete`` parameter.
   runnableExamples:
     import json
     proc handler(json: JsonNode) =
       echo "Got a new message!"
 
-    var pubsub = newPubSub("stomp://user:user@192.168.111.222/", "")
+    var pubsub = newPubSub("stomp://user:user@192.168.111.222/", "model_exchange")
 
     pubsub.subscribe("user.*", handler)
 
@@ -158,7 +195,7 @@ proc publishModelEvent*(pubsub: PubSub, model_name, event_name: string, obj: Jso
   runnableExamples:
     import json
     var
-      pubsub = newPubSub("stomp://user:user@192.168.111.222/", "")
+      pubsub = newPubSub("stomp://user:user@192.168.111.222/", "model_exchange")
       jsonObj = %*{"id": 1}
 
     pubsub.publishModelEvent("user", "saved", jsonObj)
