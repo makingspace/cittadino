@@ -1232,6 +1232,7 @@ function main() {
     </select>
   </div>
   <ul class="simple simple-toc" id="toc-list">
+<li><a class="reference" id="cittadino-a-simple-opinionated-pubsub-framework_toc" href="#cittadino-a-simple-opinionated-pubsub-framework">cittadino: a simple, opinionated pubsub framework</a></li>
 <li>
   <a class="reference reference-toplevel" href="#6" id="56">Imports</a>
   <ul class="simple simple-toc-section">
@@ -1250,7 +1251,8 @@ function main() {
   <li><a class="reference" href="#errorCallback=,PubSub,StompCallback"
     title="errorCallback=(pubsub: PubSub; callback: StompCallback)"><wbr />error<wbr />Callback=<span class="attachedType" style="visibility:hidden"></span></a></li>
   <li><a class="reference" href="#subscribe,PubSub,string,PubSubCallback"
-    title="subscribe(pubsub: var PubSub; topic: string; callback: PubSubCallback)"><wbr />subscribe<span class="attachedType" style="visibility:hidden"></span></a></li>
+    title="subscribe(pubsub: var PubSub; topic: string; callback: PubSubCallback;
+          autoDelete = false)"><wbr />subscribe<span class="attachedType" style="visibility:hidden"></span></a></li>
   <li><a class="reference" href="#run,PubSub"
     title="run(pubsub: PubSub)"><wbr />run<span class="attachedType" style="visibility:hidden"></span></a></li>
   <li><a class="reference" href="#publishModelEvent,PubSub,string,string,JsonNode"
@@ -1264,7 +1266,11 @@ function main() {
   </div>
   <div class="nine columns" id="content">
   <div id="tocRoot"></div>
-  <p class="module-desc"></p>
+  <p class="module-desc">
+<h1><a class="toc-backref" id="cittadino-a-simple-opinionated-pubsub-framework" href="#cittadino-a-simple-opinionated-pubsub-framework">cittadino: a simple, opinionated pubsub framework</a></h1><p><em>cittadino</em> is a simple, small library that implements a pubsub system over STOMP.</p>
+<p>It exposes a single main object type, <tt class="docutils literal"><span class="pre">PubSub</span></tt>, with its constructor, <tt class="docutils literal"><span class="pre">newPubSub()</span></tt>, which provides two main procs: <tt class="docutils literal"><span class="pre">publishModelEvent()</span></tt> and <tt class="docutils literal"><span class="pre">subscribe()</span></tt>. These procedures take care of publishing and subscribing, respectively. Subscriber procedures can be registered with <tt class="docutils literal"><span class="pre">subscribe()</span></tt> to certain AMQP/STOMP-style topic patterns, and arbitrary JSON messages can be sent to routing keys with <tt class="docutils literal"><span class="pre">publishModelEvent()</span></tt>.</p>
+<p>In order process incoming events, call <tt class="docutils literal"><span class="pre">run()</span></tt> inside of a process. That process will loop and block, waiting for incoming messages. Any topics that match the patterns that were registered with <tt class="docutils literal"><span class="pre">subscribe()</span></tt> will have their messages passed to the handler procedures. </p>
+</p>
   <div class="section" id="6">
 <h1><a class="toc-backref" href="#6">Imports</a></h1>
 <dl class="item">
@@ -1276,9 +1282,16 @@ function main() {
 <dt id="newPubSub"><a name="newPubSub,string,string,string"></a><pre><span class="Keyword">proc</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="Identifier">stompUrl</span><span class="Other">,</span> <span class="Identifier">modelExchangeName</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">nameSpace</span> <span class="Other">=</span> <span class="StringLit">&quot;&quot;</span><span class="Other">)</span><span class="Other">:</span> <span class="Identifier">PubSub</span> <span class="Other pragmabegin">{.</span><div class="pragma">
     <span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">OSError</span><span class="Other">,</span> <span class="Identifier">OverflowError</span><span class="Other">,</span> <span class="Identifier">StompError</span><span class="Other">,</span> <span class="Identifier">ValueError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></div><span class="Other pragmaend">.}</span></pre></dt>
 <dd>
-Create a new PubSub object. Given the URL of a STOMP server and the name of the exchange to listen to, will create and manage a STOMP connection, optionally suffixed with <tt class="docutils literal"><span class="pre">nameSpace</span></tt>.
+<p>Create a new PubSub object. Given the URL of a STOMP server and the name of the exchange to listen to, will create and manage a STOMP connection, optionally suffixed with <tt class="docutils literal"><span class="pre">nameSpace</span></tt>.</p>
+<p>The URL should be a fully qualified <cite>STOMP</cite> URI: starting with <tt class="docutils literal"><span class="pre">stomp://</span></tt> or <tt class="docutils literal"><span class="pre">stomp+ssl://</span></tt> including necessary user/password information, including a <tt class="docutils literal"><span class="pre">vhost</span></tt> at the end (in the examples, the default <tt class="docutils literal"><span class="pre">/</span></tt>), and finally ending with query parameters to encode connection options.</p>
+<p>Currently the Nim STOMP library understands a single query parameter: <tt class="docutils literal"><span class="pre">heartbeat=&lt;interval&gt;</span></tt>, which will request a heartbeat from the STOMP server every <tt class="docutils literal"><span class="pre">interval</span></tt> seconds.</p>
+
 <strong class="examples_text">Examples:</strong>
-<pre class="listing"><span class="Keyword">var</span> <span class="Identifier">pubsub</span> <span class="Other">=</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="StringLit">&quot;stomp://user:user@192.168.111.222/&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;&quot;</span><span class="Other">)</span></pre>
+<pre class="listing"><span class="Keyword">var</span> <span class="Identifier">pubsub</span> <span class="Other">=</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="StringLit">&quot;stomp://user:user@192.168.111.222/&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;model_exchange&quot;</span><span class="Other">)</span></pre>
+<strong class="examples_text">Examples:</strong>
+<pre class="listing"><span class="Keyword">var</span> <span class="Identifier">pubsub</span> <span class="Other">=</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="StringLit">&quot;stomp://user:user@192.168.111.222/?heartbeat=10&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;amq_ex&quot;</span><span class="Other">)</span></pre>
+<strong class="examples_text">Examples:</strong>
+<pre class="listing"><span class="Keyword">var</span> <span class="Identifier">pubsub</span> <span class="Other">=</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="StringLit">&quot;stomp+ssl://user:user@192.168.111.222/&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;my_exchange&quot;</span><span class="Other">)</span></pre>
 
 </dd>
 <dt id="connectedCallback="><a name="connectedCallback=,PubSub,StompCallback"></a><pre><span class="Keyword">proc</span> <span class="Identifier">connectedCallback=</span><span class="Other">(</span><span class="Identifier">pubsub</span><span class="Other">:</span> <span class="Identifier">PubSub</span><span class="Other">;</span> <span class="Identifier">callback</span><span class="Other">:</span> <span class="Identifier">StompCallback</span><span class="Other">)</span> <span class="Other pragmabegin">{.</span><div class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Other">]</span></div><span class="Other pragmaend">.}</span></pre></dt>
@@ -1296,18 +1309,20 @@ Set the callback procedure to be called whenever <tt class="docutils literal"><s
 Set the callback procedure to be called whenever <tt class="docutils literal"><span class="pre">pubsub</span></tt> receives a error from the STOMP server.
 
 </dd>
-<dt id="subscribe"><a name="subscribe,PubSub,string,PubSubCallback"></a><pre><span class="Keyword">proc</span> <span class="Identifier">subscribe</span><span class="Other">(</span><span class="Identifier">pubsub</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">PubSub</span><span class="Other">;</span> <span class="Identifier">topic</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">callback</span><span class="Other">:</span> <span class="Identifier">PubSubCallback</span><span class="Other">)</span> <span class="Other pragmabegin">{.</span><div class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span>
-    <span class="Identifier">Exception</span><span class="Other">,</span> <span class="Identifier">KeyError</span><span class="Other">,</span> <span class="Identifier">RegexError</span><span class="Other">,</span> <span class="Identifier">OSError</span><span class="Other">,</span> <span class="Identifier">SslError</span><span class="Other">,</span> <span class="Identifier">TimeoutError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">,</span>
-    <span class="Identifier">OverflowError</span><span class="Other">,</span> <span class="Identifier">ValueError</span><span class="Other">,</span> <span class="Identifier">StompError</span><span class="Other">]</span><span class="Other">,</span>
-    <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">RootEffect</span><span class="Other">,</span> <span class="Identifier">ReadIOEffect</span><span class="Other">,</span> <span class="Identifier">WriteIOEffect</span><span class="Other">,</span> <span class="Identifier">TimeEffect</span><span class="Other">]</span></div><span class="Other pragmaend">.}</span></pre></dt>
+<dt id="subscribe"><a name="subscribe,PubSub,string,PubSubCallback"></a><pre><span class="Keyword">proc</span> <span class="Identifier">subscribe</span><span class="Other">(</span><span class="Identifier">pubsub</span><span class="Other">:</span> <span class="Keyword">var</span> <span class="Identifier">PubSub</span><span class="Other">;</span> <span class="Identifier">topic</span><span class="Other">:</span> <span class="Identifier">string</span><span class="Other">;</span> <span class="Identifier">callback</span><span class="Other">:</span> <span class="Identifier">PubSubCallback</span><span class="Other">;</span>
+              <span class="Identifier">autoDelete</span> <span class="Other">=</span> <span class="Identifier">false</span><span class="Other">)</span> <span class="Other pragmabegin">{.</span><div class="pragma"><span class="Identifier">raises</span><span class="Other">:</span> <span class="Other">[</span><span class="Identifier">Exception</span><span class="Other">,</span> <span class="Identifier">KeyError</span><span class="Other">,</span> <span class="Identifier">RegexError</span><span class="Other">,</span> <span class="Identifier">OSError</span><span class="Other">,</span>
+    <span class="Identifier">SslError</span><span class="Other">,</span> <span class="Identifier">TimeoutError</span><span class="Other">,</span> <span class="Identifier">AssertionError</span><span class="Other">,</span> <span class="Identifier">OverflowError</span><span class="Other">,</span> <span class="Identifier">ValueError</span><span class="Other">,</span> <span class="Identifier">StompError</span><span class="Other">]</span><span class="Other">,</span> <span class="Identifier">tags</span><span class="Other">:</span> <span class="Other">[</span>
+    <span class="Identifier">RootEffect</span><span class="Other">,</span> <span class="Identifier">ReadIOEffect</span><span class="Other">,</span> <span class="Identifier">WriteIOEffect</span><span class="Other">,</span> <span class="Identifier">TimeEffect</span><span class="Other">]</span></div><span class="Other pragmaend">.}</span></pre></dt>
 <dd>
-Register a callback procedure against a subscription pattern. <tt class="docutils literal"><span class="pre">callback</span></tt> whenever a message is received whose destination matches against <tt class="docutils literal"><span class="pre">topic</span></tt>. 
+<p>Register a callback procedure against a subscription pattern. <tt class="docutils literal"><span class="pre">callback</span></tt> whenever a message is received whose destination matches against <tt class="docutils literal"><span class="pre">topic</span></tt>.</p>
+<p>Destinations are declared with <tt class="docutils literal"><span class="pre">durable:true</span></tt>, which specifies that if the broker is restarted, the queue should be retained. By default they are also created with <tt class="docutils literal"><span class="pre">auto-delete:false</span></tt>, which specifies that the queue should not be destroyed if there is no active consumer (ie, published messages will still be routed to the queue and consumed when <tt class="docutils literal"><span class="pre">run()</span></tt> is called again). This can be toggled with the <tt class="docutils literal"><span class="pre">autoDelete</span></tt> parameter.</p>
+
 <strong class="examples_text">Examples:</strong>
 <pre class="listing">
 <span class="Keyword">proc</span> <span class="Identifier">handler</span><span class="Other">(</span><span class="Identifier">json</span><span class="Other">:</span> <span class="Identifier">JsonNode</span><span class="Other">)</span> <span class="Other">=</span>
   <span class="Identifier">echo</span> <span class="StringLit">&quot;Got a new message!&quot;</span>
 
-<span class="Keyword">var</span> <span class="Identifier">pubsub</span> <span class="Other">=</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="StringLit">&quot;stomp://user:user@192.168.111.222/&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;&quot;</span><span class="Other">)</span>
+<span class="Keyword">var</span> <span class="Identifier">pubsub</span> <span class="Other">=</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="StringLit">&quot;stomp://user:user@192.168.111.222/&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;model_exchange&quot;</span><span class="Other">)</span>
 <span class="Identifier">pubsub</span><span class="Other">.</span><span class="Identifier">subscribe</span><span class="Other">(</span><span class="StringLit">&quot;user.*&quot;</span><span class="Other">,</span> <span class="Identifier">handler</span><span class="Other">)</span></pre>
 
 </dd>
@@ -1330,7 +1345,7 @@ Publish an event to <tt class="docutils literal"><span class="pre">pubsub</span>
 <strong class="examples_text">Examples:</strong>
 <pre class="listing">
 <span class="Keyword">var</span>
-  <span class="Identifier">pubsub</span> <span class="Other">=</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="StringLit">&quot;stomp://user:user@192.168.111.222/&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;&quot;</span><span class="Other">)</span>
+  <span class="Identifier">pubsub</span> <span class="Other">=</span> <span class="Identifier">newPubSub</span><span class="Other">(</span><span class="StringLit">&quot;stomp://user:user@192.168.111.222/&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;model_exchange&quot;</span><span class="Other">)</span>
   <span class="Identifier">jsonObj</span> <span class="Other">=</span> <span class="Operator">%*</span><span class="Other">{</span><span class="StringLit">&quot;id&quot;</span><span class="Other">:</span> <span class="DecNumber">1</span><span class="Other">}</span>
 <span class="Identifier">pubsub</span><span class="Other">.</span><span class="Identifier">publishModelEvent</span><span class="Other">(</span><span class="StringLit">&quot;user&quot;</span><span class="Other">,</span> <span class="StringLit">&quot;saved&quot;</span><span class="Other">,</span> <span class="Identifier">jsonObj</span><span class="Other">)</span></pre>
 
@@ -1345,7 +1360,7 @@ Publish an event to <tt class="docutils literal"><span class="pre">pubsub</span>
       <div class="twelve-columns footer">
         <span class="nim-sprite"></span>
         <br/>
-        <small>Made with Nim. Generated: 2018-04-04 10:06:53 UTC</small>
+        <small>Made with Nim. Generated: 2018-04-04 17:02:39 UTC</small>
       </div>
     </div>
   </div>
