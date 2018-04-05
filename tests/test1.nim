@@ -188,7 +188,7 @@ suite "non-JSON pubsub tests":
       etSubscribe,
       etDrain,
       etCallback,
-      etNack,
+      etAck,
       etDisconnect
     ] == eventTypes()
 
@@ -216,7 +216,7 @@ suite "malformed destination pubsub tests":
       etConnect,
       etDrain,
       etCallback,
-      etNack,
+      etAck,
       etDisconnect
     ] == eventTypes()
 

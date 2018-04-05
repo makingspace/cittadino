@@ -36,9 +36,25 @@ proc defaultOnHeartbeat(c: StompClient, r: StompResponse) =
 proc defaultOnError(c: StompClient, r: StompResponse) =
   logging.error "Error: ", r
 
+template ackAndReturn(c: StompClient, id: string): untyped =
+  c.ack(id)
+  return
+
 template nackAndReturn(c: StompClient, id: string): untyped =
   c.nack(id)
   return
+
+type StopProcessingAck* = object of Exception ## \
+  ## Regardless of callback order, when this exception is caught, ACK, return
+  ## and don't call any more exceptions.
+
+type StopProcessingNack* = object of Exception ## \
+  ## Regardless of callback order, when this exception is caught, NACK, return
+  ## and don't call any more exceptions.
+
+type SkipSubscriber* = object of Exception ## \
+  ## Skip the current subscriber callback and continue with the next one, or
+  ## ACK if there are no other subscribers.
 
 proc constructMessageCallback(pubsub: PubSub): StompCallback =
   proc onMessageCallback(c: StompClient, r: StompResponse) {.closure.} =
@@ -53,7 +69,7 @@ proc constructMessageCallback(pubsub: PubSub): StompCallback =
       return
     if "/" notin destination:
       logging.error "Malformed message destination: " & destination
-      nackAndReturn(c, id)
+      ackAndReturn(c, id)
 
     let routingKey = destination.rsplit("/", maxsplit=1)[1]
     var hasMatched = false
@@ -63,14 +79,21 @@ proc constructMessageCallback(pubsub: PubSub): StompCallback =
         hasMatched = true
         try:
           let responseJson = r.payload.parseJson()
-
           for callback in callbacks:
-            callback(responseJson)
+            try:
+              callback(responseJson)
+            except StopProcessingAck:
+              ackAndReturn(c, id)
+            except StopProcessingNack:
+              nackAndReturn(c, id)
+            except SkipSubscriber:
+              continue
+
         except JsonParsingError:
           logging.error "Expected JSON in payload to $#: $#" % [
             destination, r.payload
           ]
-          nackAndReturn(c, id)
+          ackAndReturn(c, id)
 
     c.ack(id)
     if not hasMatched:
