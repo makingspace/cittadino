@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.0"
+version       = "0.1.1"
 author        = "Zach Smith"
 description   = "A simple PubSub framework using STOMP."
 license       = "BSD2"
