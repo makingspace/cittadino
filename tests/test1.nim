@@ -49,7 +49,7 @@ suite "pubsub tests":
     checkDestination(destination)
 
   test "subscribe":
-    pubsub.subscribe(testRoutingKey, handler)
+    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
 
     check @[etConnect, etOnConnect, etSubscribe] == eventTypes()
 
@@ -82,7 +82,7 @@ suite "pubsub tests":
       disconnectEvent.values[0] == testUrl
 
   test "message callback with one subscriber":
-    pubsub.subscribe(testRoutingKey, handler)
+    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
     pubsub.run()
 
     check @[
@@ -97,8 +97,8 @@ suite "pubsub tests":
     ] == eventTypes()
 
   test "message callback with two subscribers":
-    pubsub.subscribe(testRoutingKey, handler)
-    pubsub.subscribe(testRoutingKey, handler2)
+    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
+    pubsub.subscribe(testRoutingKey, handler2, "bookingSub2")
     pubsub.run()
 
     check @[
@@ -115,9 +115,9 @@ suite "pubsub tests":
     ] == eventTypes()
 
   test "message subscription is idempotent":
-    pubsub.subscribe(testRoutingKey, handler)
+    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
     # Subscribe twice.
-    pubsub.subscribe(testRoutingKey, handler)
+    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
     pubsub.run()
 
     check @[
@@ -135,7 +135,7 @@ suite "pubsub tests":
     ] == eventTypes()
 
   test "message subscription with other subscriber":
-    pubsub.subscribe(testRoutingKey2, handler)
+    pubsub.subscribe(testRoutingKey2, handler, "bookingSub1")
     pubsub.run()
 
     check @[
@@ -180,7 +180,7 @@ suite "non-JSON pubsub tests":
     check testEventLog[2].values[0] == nonJsonPayload
 
   test "handle non-JSON with one subscriber":
-    pubsub.subscribe(testRoutingKey, handler)
+    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
     pubsub.run()
 
     check @[

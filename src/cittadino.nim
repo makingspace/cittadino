@@ -159,7 +159,13 @@ proc exchangePath(pubsub: PubSub): string =
 
   return "/exchange/" & exchangeName
 
-proc subscribe*(pubsub: var PubSub, topic: string, callback: PubSubCallback, autoDelete = false) =
+proc subscribe*(
+  pubsub: var PubSub,
+  topic: string,
+  callback: PubSubCallback,
+  subscriberName: string,
+  autoDelete = false
+) =
   ## Register a callback procedure against a subscription pattern. ``callback``
   ## whenever a message is received whose destination matches against
   ## ``topic``.
@@ -189,8 +195,9 @@ proc subscribe*(pubsub: var PubSub, topic: string, callback: PubSubCallback, aut
     pubsub.client.connect()
   pubsub.client.subscribe(
     "$#/$#" % [pubsub.exchangePath, topic],
-    "client-individual",
-    @[("durable", "true"), ("auto-delete", "false")]
+    ack = "client-individual",
+    id = "[$#]$#" % [pubsub.nameSpace, subscriberName],
+    headers = @[("durable", "true"), ("auto-delete", "false")]
   )
 
 proc run*(pubsub: PubSub) =
