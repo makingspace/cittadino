@@ -20,7 +20,7 @@ from logging import nil
 
 type
   PubSubCallback = proc(update: JsonNode)
-  StompCallback = proc(c: StompClient, r: StompResponse)
+  StompCallback = proc(c: StompClient, r: StompResponse) {.closure.}
   Subscriber = tuple[pattern: Regex, callbacks: seq[PubSubCallback]]
   PubSub = ref object
     client: StompClient
@@ -159,11 +159,33 @@ proc exchangePath(pubsub: PubSub): string =
 
   return "/exchange/" & exchangeName
 
+proc subscribe*(
+  pubsub: var PubSub,
+  topic: string,
+  callback: PubSubCallback,
+  subscriberName: string,
+) =
+  if topic in pubsub.subscribers:
+    if callback notin pubsub.subscribers[topic].callbacks:
+      pubsub.subscribers[topic].callbacks.add(callback)
+  else:
+    pubsub.subscribers[topic] = (re(topic), @[callback])
+
+  if not pubsub.client.connected:
+    pubsub.client.connect()
+
+  subscribe(
+    pubsub.client,
+    "$#/$#" % [pubsub.exchangePath, topic],
+    ack = "client-individual",
+    id = "[$#]$#" % [pubsub.nameSpace, subscriberName],
+    headers = @[("durable", "true"), ("auto-delete", "false")]
+  )
+
 template subscribe*(
   pubsub: var PubSub,
   topic: string,
   subscriberName: string,
-  autoDelete = false,
   body: untyped
 ): typed {.dirty.} =
   ## Register a callback procedure against a subscription pattern. ``callback``
@@ -175,7 +197,7 @@ template subscribe*(
   ## also created with ``auto-delete:false``, which specifies that the queue
   ## should not be destroyed if there is no active consumer (ie, published
   ## messages will still be routed to the queue and consumed when ``run()`` is
-  ## called again). This can be toggled with the ``autoDelete`` parameter.
+  ## called again).
   runnableExamples:
     import json
     var pubsub = newPubSub("stomp://user:user@192.168.111.222/", "model_exchange")
@@ -186,20 +208,7 @@ template subscribe*(
   proc callback(update: JsonNode) =
     body
 
-  if topic in pubsub.subscribers:
-    if callback notin pubsub.subscribers[topic].callbacks:
-      pubsub.subscribers[topic].callbacks.add(callback)
-  else:
-    pubsub.subscribers[topic] = (re(topic), @[callback])
-
-  if not pubsub.client.connected:
-    pubsub.client.connect()
-  pubsub.client.subscribe(
-    "$#/$#" % [pubsub.exchangePath, topic],
-    ack = "client-individual",
-    id = "[$#]$#" % [pubsub.nameSpace, subscriberName],
-    headers = @[("durable", "true"), ("auto-delete", "false")]
-  )
+  subscribe(pubsub, topic, callback, subscriberName)
 
 proc run*(pubsub: PubSub) =
   ## Run forever, listening for messages from the STOMP server. When one is
