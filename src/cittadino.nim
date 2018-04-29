@@ -159,13 +159,13 @@ proc exchangePath(pubsub: PubSub): string =
 
   return "/exchange/" & exchangeName
 
-proc subscribe*(
+template subscribe*(
   pubsub: var PubSub,
   topic: string,
-  callback: PubSubCallback,
   subscriberName: string,
-  autoDelete = false
-) =
+  autoDelete = false,
+  body: untyped
+): typed {.dirty.} =
   ## Register a callback procedure against a subscription pattern. ``callback``
   ## whenever a message is received whose destination matches against
   ## ``topic``.
@@ -178,12 +178,13 @@ proc subscribe*(
   ## called again). This can be toggled with the ``autoDelete`` parameter.
   runnableExamples:
     import json
-    proc handler(json: JsonNode) =
-      echo "Got a new message!"
-
     var pubsub = newPubSub("stomp://user:user@192.168.111.222/", "model_exchange")
 
-    pubsub.subscribe("user.*", handler)
+    pubsub.subscribe("user.*", "sampleHandler"):
+      echo "Got a new message!"
+
+  proc callback(update: JsonNode) =
+    body
 
   if topic in pubsub.subscribers:
     if callback notin pubsub.subscribers[topic].callbacks:

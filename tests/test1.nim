@@ -49,7 +49,8 @@ suite "pubsub tests":
     checkDestination(destination)
 
   test "subscribe":
-    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
+    pubsub.subscribe(testRoutingKey, "bookingSub1"):
+      handler(update)
 
     check @[etConnect, etOnConnect, etSubscribe] == eventTypes()
 
