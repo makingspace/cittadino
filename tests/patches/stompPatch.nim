@@ -88,7 +88,13 @@ proc ack*(c: StompClient, id: string) =
 proc nack*(c: StompClient, id: string) =
   testEventLog.add event(etNack, id)
 
-proc subscribe*(c: StompClient, destination, ack: string, headers: seq[Header]) =
+proc subscribe*(
+  c: StompClient,
+  destination,
+  ack = "",
+  id = "",
+  headers: seq[Header] = @[]
+) =
   testEventLog.add event(etSubscribe, destination)
 
 proc disconnect*(c: StompClient) =

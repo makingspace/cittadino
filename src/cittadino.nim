@@ -1,7 +1,8 @@
 ## cittadino: a simple, opinionated pubsub framework
 ## =================================================
 ##
-## *cittadino* is a simple, small library that implements a pubsub system over STOMP.
+## *cittadino* is a simple, small library that implements a pubsub system over
+## STOMP.
 ##
 ## It exposes a single main object type, ``PubSub``, with its constructor,
 ## ``newPubSub()``, which provides two main procs: ``publishModelEvent()`` and
@@ -21,7 +22,7 @@ from logging import nil
 type
   PubSubCallback = proc(update: JsonNode)
   StompCallback = proc(c: StompClient, r: StompResponse) {.closure.}
-  Subscriber = tuple[pattern: Regex, callbacks: seq[PubSubCallback]]
+  Subscriber = tuple[pattern: Regex, callback: PubSubCallback]
   PubSub = ref object
     client: StompClient
     exchangeName, nameSpace: string
@@ -74,20 +75,19 @@ proc constructMessageCallback(pubsub: PubSub): StompCallback =
     let routingKey = destination.rsplit("/", maxsplit=1)[1]
     var hasMatched = false
 
-    for pattern, callbacks in pubsub.subscribers.values:
+    for pattern, callback in pubsub.subscribers.values:
       if routingKey.match(pattern):
         hasMatched = true
         try:
           let responseJson = r.payload.parseJson()
-          for callback in callbacks:
-            try:
-              callback(responseJson)
-            except StopProcessingAck:
-              ackAndReturn(c, id)
-            except StopProcessingNack:
-              nackAndReturn(c, id)
-            except SkipSubscriber:
-              continue
+          try:
+            callback(responseJson)
+          except StopProcessingAck:
+            ackAndReturn(c, id)
+          except StopProcessingNack:
+            nackAndReturn(c, id)
+          except SkipSubscriber:
+            continue
 
         except JsonParsingError:
           logging.error "Expected JSON in payload to $#: $#" % [
@@ -165,17 +165,13 @@ proc subscribe*(
   callback: PubSubCallback,
   subscriberName: string,
 ) =
-  if topic in pubsub.subscribers:
-    if callback notin pubsub.subscribers[topic].callbacks:
-      pubsub.subscribers[topic].callbacks.add(callback)
-  else:
-    pubsub.subscribers[topic] = (re(topic), @[callback])
+  let key = topic & "%" & subscriberName
+  pubsub.subscribers[key] = (re(topic), callback)
 
   if not pubsub.client.connected:
     pubsub.client.connect()
 
-  subscribe(
-    pubsub.client,
+  pubsub.client.subscribe(
     "$#/$#" % [pubsub.exchangePath, topic],
     ack = "client-individual",
     id = "[$#]$#" % [pubsub.nameSpace, subscriberName],
@@ -187,7 +183,7 @@ template subscribe*(
   topic: string,
   subscriberName: string,
   body: untyped
-): typed {.dirty.} =
+): typed =
   ## Register a callback procedure against a subscription pattern. ``callback``
   ## whenever a message is received whose destination matches against
   ## ``topic``.
@@ -205,7 +201,8 @@ template subscribe*(
     pubsub.subscribe("user.*", "sampleHandler"):
       echo "Got a new message!"
 
-  proc callback(update: JsonNode) =
+  proc callback(update: JsonNode) {.gensym.} =
+    var update {.inject.} = update
     body
 
   subscribe(pubsub, topic, callback, subscriberName)
