@@ -80,20 +80,18 @@ proc constructMessageCallback(pubsub: PubSub): StompCallback =
         hasMatched = true
         try:
           let responseJson = r.payload.parseJson()
-          try:
-            callback(responseJson)
-          except StopProcessingAck:
-            ackAndReturn(c, id)
-          except StopProcessingNack:
-            nackAndReturn(c, id)
-          except SkipSubscriber:
-            continue
-
+          callback(responseJson)
         except JsonParsingError:
           logging.error "Expected JSON in payload to $#: $#" % [
             destination, r.payload
           ]
           ackAndReturn(c, id)
+        except StopProcessingAck:
+          ackAndReturn(c, id)
+        except StopProcessingNack:
+          nackAndReturn(c, id)
+        except SkipSubscriber:
+          continue
 
     c.ack(id)
     if not hasMatched:

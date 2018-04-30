@@ -20,11 +20,11 @@ suite "pubsub tests":
     proc onConnect(c: StompClient, r: StompResponse) =
       testEventLog.add event(etOnConnect)
 
-    proc handler(json: JsonNode) =
+    proc handler(update: JsonNode) =
+      let json = $update
+      # Trivial operation on json.
+      check (json.startsWith("{") and json.endsWith("}"))
       testEventLog.add event(etSubscriber)
-
-    proc handler2(json: JsonNode) =
-      handler(json)
 
     var pubsub = newPubSub(testUrl, testModelExchangeName, testNameSpace)
     pubsub.connectedCallback = onConnect
@@ -102,7 +102,7 @@ suite "pubsub tests":
     pubsub.subscribe(testRoutingKey, "bookingSub1"):
       handler(update)
     pubsub.subscribe(testRoutingKey, "bookingSub2"):
-      handler2(update)
+      handler(update)
     pubsub.run()
 
     check @[
