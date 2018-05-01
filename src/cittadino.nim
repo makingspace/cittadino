@@ -1,7 +1,8 @@
 ## cittadino: a simple, opinionated pubsub framework
 ## =================================================
 ##
-## *cittadino* is a simple, small library that implements a pubsub system over STOMP.
+## *cittadino* is a simple, small library that implements a pubsub system over
+## STOMP.
 ##
 ## It exposes a single main object type, ``PubSub``, with its constructor,
 ## ``newPubSub()``, which provides two main procs: ``publishModelEvent()`` and
@@ -20,8 +21,8 @@ from logging import nil
 
 type
   PubSubCallback = proc(update: JsonNode)
-  StompCallback = proc(c: StompClient, r: StompResponse)
-  Subscriber = tuple[pattern: Regex, callbacks: seq[PubSubCallback]]
+  StompCallback = proc(c: StompClient, r: StompResponse) {.closure.}
+  Subscriber = tuple[pattern: Regex, callback: PubSubCallback]
   PubSub = ref object
     client: StompClient
     exchangeName, nameSpace: string
@@ -74,26 +75,23 @@ proc constructMessageCallback(pubsub: PubSub): StompCallback =
     let routingKey = destination.rsplit("/", maxsplit=1)[1]
     var hasMatched = false
 
-    for pattern, callbacks in pubsub.subscribers.values:
+    for pattern, callback in pubsub.subscribers.values:
       if routingKey.match(pattern):
         hasMatched = true
         try:
           let responseJson = r.payload.parseJson()
-          for callback in callbacks:
-            try:
-              callback(responseJson)
-            except StopProcessingAck:
-              ackAndReturn(c, id)
-            except StopProcessingNack:
-              nackAndReturn(c, id)
-            except SkipSubscriber:
-              continue
-
+          callback(responseJson)
         except JsonParsingError:
           logging.error "Expected JSON in payload to $#: $#" % [
             destination, r.payload
           ]
           ackAndReturn(c, id)
+        except StopProcessingAck:
+          ackAndReturn(c, id)
+        except StopProcessingNack:
+          nackAndReturn(c, id)
+        except SkipSubscriber:
+          continue
 
     c.ack(id)
     if not hasMatched:
@@ -164,8 +162,26 @@ proc subscribe*(
   topic: string,
   callback: PubSubCallback,
   subscriberName: string,
-  autoDelete = false
 ) =
+  let key = topic & "%" & subscriberName
+  pubsub.subscribers[key] = (re(topic), callback)
+
+  if not pubsub.client.connected:
+    pubsub.client.connect()
+
+  pubsub.client.subscribe(
+    "$#/$#" % [pubsub.exchangePath, topic],
+    ack = "client-individual",
+    id = "[$#]$#" % [pubsub.nameSpace, subscriberName],
+    headers = @[("durable", "true"), ("auto-delete", "false")]
+  )
+
+template subscribe*(
+  pubsub: var PubSub,
+  topic: string,
+  subscriberName: string,
+  body: untyped
+): typed =
   ## Register a callback procedure against a subscription pattern. ``callback``
   ## whenever a message is received whose destination matches against
   ## ``topic``.
@@ -175,30 +191,19 @@ proc subscribe*(
   ## also created with ``auto-delete:false``, which specifies that the queue
   ## should not be destroyed if there is no active consumer (ie, published
   ## messages will still be routed to the queue and consumed when ``run()`` is
-  ## called again). This can be toggled with the ``autoDelete`` parameter.
+  ## called again).
   runnableExamples:
     import json
-    proc handler(json: JsonNode) =
-      echo "Got a new message!"
-
     var pubsub = newPubSub("stomp://user:user@192.168.111.222/", "model_exchange")
 
-    pubsub.subscribe("user.*", handler)
+    pubsub.subscribe("user.*", "sampleHandler"):
+      echo "Got a new message!"
 
-  if topic in pubsub.subscribers:
-    if callback notin pubsub.subscribers[topic].callbacks:
-      pubsub.subscribers[topic].callbacks.add(callback)
-  else:
-    pubsub.subscribers[topic] = (re(topic), @[callback])
+  proc callback(update: JsonNode) {.gensym.} =
+    var update {.inject.} = update
+    body
 
-  if not pubsub.client.connected:
-    pubsub.client.connect()
-  pubsub.client.subscribe(
-    "$#/$#" % [pubsub.exchangePath, topic],
-    ack = "client-individual",
-    id = "[$#]$#" % [pubsub.nameSpace, subscriberName],
-    headers = @[("durable", "true"), ("auto-delete", "false")]
-  )
+  subscribe(pubsub, topic, callback, subscriberName)
 
 proc run*(pubsub: PubSub) =
   ## Run forever, listening for messages from the STOMP server. When one is

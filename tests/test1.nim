@@ -20,11 +20,11 @@ suite "pubsub tests":
     proc onConnect(c: StompClient, r: StompResponse) =
       testEventLog.add event(etOnConnect)
 
-    proc handler(json: JsonNode) =
+    proc handler(update: JsonNode) =
+      let json = $update
+      # Trivial operation on json.
+      check (json.startsWith("{") and json.endsWith("}"))
       testEventLog.add event(etSubscriber)
-
-    proc handler2(json: JsonNode) =
-      handler(json)
 
     var pubsub = newPubSub(testUrl, testModelExchangeName, testNameSpace)
     pubsub.connectedCallback = onConnect
@@ -49,7 +49,8 @@ suite "pubsub tests":
     checkDestination(destination)
 
   test "subscribe":
-    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
+    pubsub.subscribe(testRoutingKey, "bookingSub1"):
+      handler(update)
 
     check @[etConnect, etOnConnect, etSubscribe] == eventTypes()
 
@@ -82,7 +83,8 @@ suite "pubsub tests":
       disconnectEvent.values[0] == testUrl
 
   test "message callback with one subscriber":
-    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
+    pubsub.subscribe(testRoutingKey, "bookingSub1"):
+      handler(update)
     pubsub.run()
 
     check @[
@@ -97,8 +99,10 @@ suite "pubsub tests":
     ] == eventTypes()
 
   test "message callback with two subscribers":
-    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
-    pubsub.subscribe(testRoutingKey, handler2, "bookingSub2")
+    pubsub.subscribe(testRoutingKey, "bookingSub1"):
+      handler(update)
+    pubsub.subscribe(testRoutingKey, "bookingSub2"):
+      handler(update)
     pubsub.run()
 
     check @[
@@ -115,9 +119,11 @@ suite "pubsub tests":
     ] == eventTypes()
 
   test "message subscription is idempotent":
-    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
+    pubsub.subscribe(testRoutingKey, "bookingSub1"):
+      handler(update)
     # Subscribe twice.
-    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
+    pubsub.subscribe(testRoutingKey, "bookingSub1"):
+      handler(update)
     pubsub.run()
 
     check @[
@@ -135,7 +141,8 @@ suite "pubsub tests":
     ] == eventTypes()
 
   test "message subscription with other subscriber":
-    pubsub.subscribe(testRoutingKey2, handler, "bookingSub1")
+    pubsub.subscribe(testRoutingKey2, "bookingSub1"):
+      handler(update)
     pubsub.run()
 
     check @[
@@ -180,7 +187,9 @@ suite "non-JSON pubsub tests":
     check testEventLog[2].values[0] == nonJsonPayload
 
   test "handle non-JSON with one subscriber":
-    pubsub.subscribe(testRoutingKey, handler, "bookingSub1")
+    pubsub.subscribe(testRoutingKey, "bookingSub1"):
+      handler(update)
+
     pubsub.run()
 
     check @[
