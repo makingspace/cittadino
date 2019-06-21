@@ -49,14 +49,12 @@ proc `[]`*(r: StompResponse, key: string): string =
   of "destination":
     result = testDestination
   of "message-id":
-    if not testExposeMessageId:
-      result = nil
-    else:
+    if testExposeMessageId:
       result = testMessageId
   of "server":
     result = "RabbitMQ/3.6.15"
   else:
-    result = nil
+    result = ""
 
 proc `$`*(c: StompClient): string =
   result = "Client " & c.uri

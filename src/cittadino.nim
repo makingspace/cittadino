@@ -63,7 +63,7 @@ proc constructMessageCallback(pubsub: PubSub): StompCallback =
       id = r["message-id"]
       destination = r["destination"]
 
-    if id.isNil:
+    if id.len == 0:
       logging.error "Could not extract message-id; can not ACK, will not continue.\nResp: $#" % [
         $r
       ]
